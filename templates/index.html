@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Network Traffic Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1c2733; }
+  header { background: #1f3a5f; color: white; padding: 14px 24px; }
+  main { padding: 20px 24px; max-width: 1200px; margin: auto; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { background: white; border-radius: 8px; padding: 14px 18px; flex: 1; min-width: 160px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .card b { display: block; font-size: 24px; }
+  .chartbox { background: white; border-radius: 8px; padding: 14px; height: 340px;
+              width: 600px; max-width: 100%; box-shadow: 0 1px 3px rgba(0,0,0,.15); margin-bottom: 16px; }
+  .bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  select, input, button { padding: 8px 10px; border: 1px solid #b8c2cc; border-radius: 6px; font-size: 14px; }
+  button { background: #1f3a5f; color: white; border: 0; cursor: pointer; }
+  .tbl { max-height: 420px; overflow: auto; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #e3e8ee; text-align: left; white-space: nowrap; }
+  th { background: #e9eef4; position: sticky; top: 0; }
+</style>
+</head>
+<body>
+<header><h2 style="margin:0">Network Traffic Monitoring and Analysis System</h2></header>
+<main>
+
+  <div class="cards">
+    <div class="card">Total packets<b id="total">0</b></div>
+    <div class="card">Total data<b id="bytes">0 KB</b></div>
+    <div class="card">Top source IP<b id="topsrc" style="font-size:16px">-</b></div>
+  </div>
+
+  <div class="chartbox"><canvas id="protoChart"></canvas></div>
+
+  <div class="bar">
+    <select id="fproto">
+      <option value="">All protocols</option>
+      <option>TCP</option><option>UDP</option><option>DNS</option>
+      <option>HTTP</option><option>HTTPS</option><option>ICMP</option>
+      <option>ARP</option><option>OTHER</option>
+    </select>
+    <input id="fip" placeholder="Filter by IP address">
+    <button onclick="loadPackets()">Apply filter</button>
+  </div>
+
+  <div class="tbl">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Time</th><th>Protocol</th><th>Source IP</th><th>Src port</th>
+            <th>Destination IP</th><th>Dst port</th><th>Size (bytes)</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+Chart.register(ChartDataLabels);
+Chart.defaults.color = "#1c2733";
+
+// Light blue shades, one fixed color per protocol
+const COLORS = {
+  HTTPS: "#60a5fa", UDP: "#7dd3fc", DNS: "#93c5fd", TCP: "#38bdf8",
+  ICMP: "#a5d8ff", ARP: "#bae6fd", HTTP: "#67e8f9", OTHER: "#c7d2fe"
+};
+
+const protoChart = new Chart($("protoChart"), {
+  type: "doughnut",
+  data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor: "#ffffff", borderWidth: 2 }] },
+  options: {
+    maintainAspectRatio: false,
+    plugins: {
+      title: { display: true, text: "Protocol distribution" },
+      // Labels drawn on the slices, always visible (no hover needed)
+      datalabels: {
+        color: "#0b2540",
+        font: { weight: "bold", size: 11 },
+        display: ctx => {
+          const d = ctx.dataset.data;
+          const total = d.reduce((a, b) => a + b, 0) || 1;
+          return d[ctx.dataIndex] / total > 0.05;      // hide on very thin slices
+        },
+        formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex] + "\n" + value
+      },
+      // Legend on the right lists every protocol with count and percentage
+      legend: {
+        position: "right",
+        labels: {
+          generateLabels(chart) {
+            const ds = chart.data.datasets[0];
+            const total = ds.data.reduce((a, b) => a + b, 0) || 1;
+            return chart.data.labels.map((label, i) => ({
+              text: label + ": " + ds.data[i] + " (" + Math.round(ds.data[i] * 100 / total) + "%)",
+              fillStyle: ds.backgroundColor[i],
+              strokeStyle: "#ffffff",
+              index: i,
+              hidden: false
+            }));
+          }
+        }
+      }
+    }
+  }
+});
+
+async function loadStats() {
+  const s = await (await fetch("/api/stats")).json();
+  $("total").textContent = s.total;
+  $("bytes").textContent = (s.total_bytes / 1024).toFixed(1) + " KB";
+  $("topsrc").textContent = s.top_sources.length
+      ? s.top_sources[0].ip + " (" + s.top_sources[0].count + ")" : "-";
+  const labels = s.by_protocol.map(x => x.protocol);
+  protoChart.data.labels = labels;
+  protoChart.data.datasets[0].data = s.by_protocol.map(x => x.count);
+  protoChart.data.datasets[0].backgroundColor = labels.map(l => COLORS[l] || "#bfdbfe");
+  protoChart.update();
+}
+
+async function loadPackets() {
+  const params = new URLSearchParams({
+    protocol: $("fproto").value,
+    ip: $("fip").value.trim()
+  });
+  const data = await (await fetch("/api/packets?" + params)).json();
+  const tbody = $("rows");
+  tbody.innerHTML = "";
+  for (const p of data) {
+    const tr = document.createElement("tr");
+    for (const v of [p.id, p.timestamp, p.protocol, p.src_ip, p.src_port,
+                     p.dst_ip, p.dst_port, p.size]) {
+      const td = document.createElement("td");
+      td.textContent = v ?? "-";
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+function refresh() { loadStats(); loadPackets(); }
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

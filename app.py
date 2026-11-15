@@ -1,6 +1,5 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import sqlite3
-
 app = Flask(__name__)
 
 def query(sql, params=()):
@@ -12,8 +11,7 @@ def query(sql, params=()):
 
 @app.route("/")
 def home():
-    return "Network Traffic Monitor is running"
-
+    return render_template("index.html")
 @app.route("/api/packets")
 def packets():
     protocol = request.args.get("protocol", "")
