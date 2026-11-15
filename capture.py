@@ -1,5 +1,6 @@
 from scapy.all import sniff, Ether, IP, IPv6, TCP, UDP, ICMP, DNS, ARP
 from datetime import datetime
+import db
 
 def identify_protocol(pkt):
     if pkt.haslayer(ARP):
@@ -33,6 +34,10 @@ def handle_packet(pkt):
     elif pkt.haslayer(IPv6):
         src_ip = pkt[IPv6].src
         dst_ip = pkt[IPv6].dst
+    # CHANGE 1: ARP packets have no IP layer, so without this their IPs are saved as None
+    elif pkt.haslayer(ARP):
+        src_ip = pkt[ARP].psrc
+        dst_ip = pkt[ARP].pdst
 
     if pkt.haslayer(TCP):
         src_port = pkt[TCP].sport
@@ -43,9 +48,16 @@ def handle_packet(pkt):
 
     size = len(pkt)
     protocol = identify_protocol(pkt)
-    time = datetime.fromtimestamp(float(pkt.time)).strftime("%H:%M:%S")
+    # CHANGE 2: add the date, because the database keeps packets from many days
+    time = datetime.fromtimestamp(float(pkt.time)).strftime("%Y-%m-%d %H:%M:%S")
 
     print(time, protocol, "|", src_ip, ":", src_port, "->", dst_ip, ":", dst_port, "| size:", size)
 
-print("Capturing 10 packets...")
+    # CHANGE 3: save the packet. It goes last, after every value has been calculated
+    db.insert_packet((time, src_mac, dst_mac, src_ip, dst_ip,
+                      src_port, dst_port, protocol, size))
+
+# CHANGE 4: create the table once, before sniffing starts (it does nothing if the table already exists)
+db.init_db()
+print("Capturing 30 packets...")
 sniff(prn=handle_packet, count=30)
