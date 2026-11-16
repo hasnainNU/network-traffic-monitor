@@ -1,4 +1,4 @@
-from scapy.all import sniff, AsyncSniffer, Ether, IP, IPv6, TCP, UDP, ICMP, DNS, ARP
+from scapy.all import sniff, AsyncSniffer, Ether, IP, IPv6, TCP, UDP, ICMP, DNS, DNSQR, ARP, Raw
 from datetime import datetime
 from time import sleep
 import db
@@ -20,6 +20,27 @@ def identify_protocol(pkt):
     if pkt.haslayer(UDP):
         return "UDP"
     return "OTHER"
+
+def extract_info(pkt, protocol):
+    try:
+        if protocol == "DNS" and pkt.haslayer(DNSQR):
+            name = pkt[DNSQR].qname
+            if isinstance(name, bytes):
+                name = name.decode("utf-8", errors="ignore")
+            kind = "response" if pkt[DNS].qr == 1 else "query"
+            return "DNS " + kind + ": " + name.rstrip(".")
+        if protocol == "HTTP" and pkt.haslayer(Raw):
+            text = pkt[Raw].load.decode("utf-8", errors="ignore")
+            lines = text.split("\r\n")
+            if lines[0].startswith(("GET", "POST", "PUT", "DELETE", "HEAD", "HTTP/")):
+                host = ""
+                for line in lines:
+                    if line.lower().startswith("host:"):
+                        host = line[5:].strip()
+                return lines[0][:80] + ("  [" + host + "]" if host else "")
+    except Exception:
+        pass
+    return ""
 
 def handle_packet(pkt):
     src_mac = dst_mac = src_ip = dst_ip = None
@@ -49,14 +70,15 @@ def handle_packet(pkt):
 
     size = len(pkt)
     protocol = identify_protocol(pkt)
+    info = extract_info(pkt, protocol)
     # include the date, because the database keeps packets from many days
     time = datetime.fromtimestamp(float(pkt.time)).strftime("%Y-%m-%d %H:%M:%S")
 
-    print(time, protocol, "|", src_ip, ":", src_port, "->", dst_ip, ":", dst_port, "| size:", size)
+    print(time, protocol, "|", src_ip, ":", src_port, "->", dst_ip, ":", dst_port, "| size:", size, "|", info)
 
     # save the packet last, after every value has been calculated
     db.insert_packet((time, src_mac, dst_mac, src_ip, dst_ip,
-                      src_port, dst_port, protocol, size))
+                      src_port, dst_port, protocol, size, info))
 
 
 # ---------- Start / Stop control (used by the dashboard buttons in app.py) ----------

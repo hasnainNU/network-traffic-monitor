@@ -15,7 +15,8 @@ def init_db():
             src_port INTEGER,
             dst_port INTEGER,
             protocol TEXT,
-            size INTEGER
+            size INTEGER,
+            info TEXT
         )
     """)
     conn.commit()
@@ -26,8 +27,8 @@ def insert_packet(row):
     conn.execute(
         """INSERT INTO packets
            (timestamp, src_mac, dst_mac, src_ip, dst_ip,
-            src_port, dst_port, protocol, size)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+            src_port, dst_port, protocol, size, info)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
         row,
     )
     conn.commit()

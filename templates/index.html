@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
   body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1c2733; }
-  header { background: #1f3a5f; color: white; padding: 14px 24px; }
+  header { background: #1f3a5f; color: white; padding: 14px 360px; }
   main { padding: 20px 24px; max-width: 1200px; margin: auto; }
   .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   .card { background: white; border-radius: 8px; padding: 14px 18px; flex: 1; min-width: 160px;
@@ -15,7 +15,7 @@
   .card b { display: block; font-size: 24px; }
   .chartbox { background: white; border-radius: 8px; padding: 14px; height: 340px;
               width: 100%; box-sizing: border-box; box-shadow: 0 1px 3px rgba(0,0,0,.15); margin-bottom: 16px; }
-  .bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .bar { display: flex; gap: 10px; margin-bottom: 12px;margin: centre ; flex-wrap: wrap; align-items: center; }
   select, input, button { padding: 8px 10px; border: 1px solid #b8c2cc; border-radius: 6px; font-size: 14px; }
   button { background: #1f3a5f; color: white; border: 0; cursor: pointer; }
   button.stop { background: #b3261e; }
@@ -33,7 +33,7 @@
 <header><h2 style="margin:0">Network Traffic Monitoring and Analysis System</h2></header>
 <main>
 
-  <!-- Capture controls -->
+
   <div class="bar">
     <select id="iface"><option value="">Default interface</option></select>
     <button onclick="startCapture()">Start capture</button>
@@ -66,7 +66,7 @@
     <table>
       <thead>
         <tr><th>#</th><th>Time</th><th>Protocol</th><th>Source IP</th><th>Src port</th>
-            <th>Destination IP</th><th>Dst port</th><th>Size (bytes)</th></tr>
+        <th>Destination IP</th><th>Dst port</th><th>Size (bytes)</th><th>Info</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -148,7 +148,7 @@ async function loadPackets() {
   for (const p of data) {
     const tr = document.createElement("tr");
     for (const v of [p.id, p.timestamp, p.protocol, p.src_ip, p.src_port,
-                     p.dst_ip, p.dst_port, p.size]) {
+       p.dst_ip, p.dst_port, p.size, p.info]){
       const td = document.createElement("td");
       td.textContent = v ?? "-";
       tr.appendChild(td);
