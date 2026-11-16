@@ -32,3 +32,9 @@ def insert_packet(row):
     )
     conn.commit()
     conn.close()
+
+def clear_packets():
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("DELETE FROM packets")
+    conn.commit()
+    conn.close()

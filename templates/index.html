@@ -14,10 +14,15 @@
           box-shadow: 0 1px 3px rgba(0,0,0,.15); }
   .card b { display: block; font-size: 24px; }
   .chartbox { background: white; border-radius: 8px; padding: 14px; height: 340px;
-              width: 600px; max-width: 100%; box-shadow: 0 1px 3px rgba(0,0,0,.15); margin-bottom: 16px; }
-  .bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+              width: 100%; box-sizing: border-box; box-shadow: 0 1px 3px rgba(0,0,0,.15); margin-bottom: 16px; }
+  .bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   select, input, button { padding: 8px 10px; border: 1px solid #b8c2cc; border-radius: 6px; font-size: 14px; }
   button { background: #1f3a5f; color: white; border: 0; cursor: pointer; }
+  button.stop { background: #b3261e; }
+  button.gray { background: #5f6b7a; }
+  .status { font-weight: bold; padding: 6px 12px; border-radius: 999px; background: #e9eef4; }
+  .status.on { background: #d9f2e3; color: #146c3b; }
+  #msg { color: #b3261e; margin-bottom: 8px; min-height: 18px; }
   .tbl { max-height: 420px; overflow: auto; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
   table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
   th, td { padding: 6px 8px; border-bottom: 1px solid #e3e8ee; text-align: left; white-space: nowrap; }
@@ -27,6 +32,16 @@
 <body>
 <header><h2 style="margin:0">Network Traffic Monitoring and Analysis System</h2></header>
 <main>
+
+  <!-- Capture controls -->
+  <div class="bar">
+    <select id="iface"><option value="">Default interface</option></select>
+    <button onclick="startCapture()">Start capture</button>
+    <button class="stop" onclick="stopCapture()">Stop</button>
+    <button class="gray" onclick="clearData()">Clear data</button>
+    <span id="status" class="status">Stopped</span>
+  </div>
+  <div id="msg"></div>
 
   <div class="cards">
     <div class="card">Total packets<b id="total">0</b></div>
@@ -142,7 +157,50 @@ async function loadPackets() {
   }
 }
 
-function refresh() { loadStats(); loadPackets(); }
+// ---------- Capture controls ----------
+async function loadInterfaces() {
+  const list = await (await fetch("/api/interfaces")).json();
+  for (const name of list) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    $("iface").appendChild(opt);
+  }
+}
+
+async function startCapture() {
+  $("msg").textContent = "";
+  const res = await fetch("/api/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ iface: $("iface").value })
+  });
+  const data = await res.json();
+  if (data.error) {
+    $("msg").textContent = "Could not start capture: " + data.error +
+        " (run the app with sudo, and check the interface name)";
+  }
+  loadStatus();
+}
+
+async function stopCapture() {
+  await fetch("/api/stop", { method: "POST" });
+  loadStatus();
+}
+
+async function clearData() {
+  await fetch("/api/clear", { method: "POST" });
+  refresh();
+}
+
+async function loadStatus() {
+  const s = await (await fetch("/api/status")).json();
+  $("status").textContent = s.running ? "Capturing..." : "Stopped";
+  $("status").className = s.running ? "status on" : "status";
+}
+
+function refresh() { loadStatus(); loadStats(); loadPackets(); }
+loadInterfaces();
 refresh();
 setInterval(refresh, 2000);
 </script>

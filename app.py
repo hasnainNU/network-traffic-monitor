@@ -1,6 +1,12 @@
 from flask import Flask, jsonify, request, render_template
+from scapy.all import get_if_list
 import sqlite3
+import db
+import capture
+
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+db.init_db()   # make sure the table exists even before the first capture
 
 def query(sql, params=()):
     conn = sqlite3.connect("packets.db")
@@ -12,6 +18,36 @@ def query(sql, params=()):
 @app.route("/")
 def home():
     return render_template("index.html")
+
+# ---------- Capture controls (used by the dashboard buttons) ----------
+@app.route("/api/interfaces")
+def interfaces():
+    return jsonify(get_if_list())
+
+@app.route("/api/start", methods=["POST"])
+def start():
+    iface = (request.get_json(silent=True) or {}).get("iface")
+    try:
+        capture.start_capture(iface)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+    return jsonify(running=capture.is_running())
+
+@app.route("/api/stop", methods=["POST"])
+def stop():
+    capture.stop_capture()
+    return jsonify(running=False)
+
+@app.route("/api/clear", methods=["POST"])
+def clear():
+    db.clear_packets()
+    return jsonify(ok=True)
+
+@app.route("/api/status")
+def status():
+    return jsonify(running=capture.is_running())
+
+# ---------- Data for the dashboard ----------
 @app.route("/api/packets")
 def packets():
     protocol = request.args.get("protocol", "")
@@ -42,4 +78,4 @@ def stats():
                    by_protocol=by_protocol, top_sources=top_sources)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
